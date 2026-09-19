@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: document-intelligence-service
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        value: sqlite:////app/storage/local.db
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "true"
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: STORAGE_BASE_PATH
+        value: /app/storage
+      - key: OCR_PROVIDER
+        value: tesseract
+      - key: OCR_LANGUAGE
+        value: eng

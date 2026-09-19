@@ -34,15 +34,16 @@ COPY alembic.ini /app/
 COPY scripts /app/scripts
 COPY sample_documents /app/sample_documents
 
-# Create storage directories
-RUN mkdir -p /app/storage/original /app/storage/pages /app/storage/processed
+# Create storage directories and set script permissions
+RUN mkdir -p /app/storage/original /app/storage/pages /app/storage/processed && \
+    chmod +x /app/scripts/start.sh
 
 # Expose port
 EXPOSE 8000
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Default command: run FastAPI application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command: run startup script
+CMD ["/app/scripts/start.sh"]
