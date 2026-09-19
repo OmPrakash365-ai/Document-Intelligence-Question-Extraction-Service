@@ -1,0 +1,46 @@
+[
+  {
+    "id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+    "document_id": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
+    "question_number": "1",
+    "question": "Which data structure operates on a First-In-First-Out (FIFO) basis?",
+    "question_type": "MCQ",
+    "options": [
+      {
+        "key": "A",
+        "text": "Stack",
+        "confidence": 1.0
+      },
+      {
+        "key": "B",
+        "text": "Queue",
+        "confidence": 1.0
+      },
+      {
+        "key": "C",
+        "text": "Binary Tree",
+        "confidence": 1.0
+      },
+      {
+        "key": "D",
+        "text": "Graph",
+        "confidence": 1.0
+      }
+    ],
+    "answer": {
+      "value": "B",
+      "confidence": 0.95,
+      "matching_status": "MATCHED",
+      "source_document_id": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
+      "source_page": 1
+    },
+    "source": {
+      "document_id": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
+      "pages": [
+        1
+      ]
+    },
+    "confidence": 0.94,
+    "extraction_status": "SUCCESS"
+  }
+]
