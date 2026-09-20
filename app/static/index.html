@@ -260,25 +260,67 @@
       lucide.createIcons();
     }
 
-    // Auto-login or check user status
+    // Silent evaluator login helper
+    async function loginSilently() {
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: "evaluator@example.com", password: "Password123!" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          token = data.access_token;
+          localStorage.setItem("token", token);
+          return true;
+        }
+      } catch (e) {
+        console.warn("Silent login failed:", e);
+      }
+      return false;
+    }
+
+    // Unified fetch helper with automatic 401 token refresh and retry
+    async function apiFetch(url, options = {}) {
+      options.headers = options.headers || {};
+      if (token) {
+        options.headers["Authorization"] = `Bearer ${token}`;
+      }
+      let res = await fetch(url, options);
+      if (res.status === 401) {
+        console.warn("401 Unauthorized encountered. Refreshing token...");
+        token = "";
+        localStorage.removeItem("token");
+        const refreshed = await loginSilently();
+        if (refreshed && token) {
+          options.headers["Authorization"] = `Bearer ${token}`;
+          res = await fetch(url, options);
+        }
+      }
+      return res;
+    }
+
+    // Auto-login or verify user status
     async function initAuth() {
       const container = document.getElementById("authContainer");
-      if (!token) {
-        // Attempt quick auto-login with default evaluator account
+      if (token) {
+        // Validate existing token
         try {
-          const res = await fetch(`${API_BASE}/auth/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email: "evaluator@example.com", password: "Password123!" }),
+          const checkRes = await fetch(`${API_BASE}/auth/me`, {
+            headers: { "Authorization": `Bearer ${token}` }
           });
-          if (res.ok) {
-            const data = await res.json();
-            token = data.access_token;
-            localStorage.setItem("token", token);
+          if (!checkRes.ok) {
+            token = "";
+            localStorage.removeItem("token");
           }
         } catch (e) {
-          console.warn("Auto-login skipped:", e);
+          token = "";
+          localStorage.removeItem("token");
         }
+      }
+
+      if (!token) {
+        await loginSilently();
       }
 
       if (token) {
@@ -297,23 +339,17 @@
             Login as Evaluator
           </button>
         `;
+        document.getElementById("documentList").innerHTML = `<div class="p-6 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200">Please log in to view documents.</div>`;
       }
       updateIcons();
     }
 
     async function login() {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "evaluator@example.com", password: "Password123!" }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        token = data.access_token;
-        localStorage.setItem("token", token);
+      const success = await loginSilently();
+      if (success) {
         initAuth();
       } else {
-        alert("Login failed. Check server status.");
+        alert("Login failed. Check server connection.");
       }
     }
 
@@ -327,14 +363,16 @@
     async function fetchDocuments() {
       if (!token) return;
       try {
-        const res = await fetch(`${API_BASE}/documents?size=50`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
-        if (!res.ok) return;
+        const res = await apiFetch(`${API_BASE}/documents?size=50`);
+        if (!res.ok) {
+          document.getElementById("documentList").innerHTML = `<div class="p-6 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200">Failed to load documents (${res.status}).</div>`;
+          return;
+        }
         const data = await res.json();
         renderDocumentList(data.items);
       } catch (e) {
         console.error("Failed to load documents", e);
+        document.getElementById("documentList").innerHTML = `<div class="p-6 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-200">Network error loading documents.</div>`;
       }
     }
 
@@ -383,9 +421,7 @@
 
       // Fetch questions
       try {
-        const res = await fetch(`${API_BASE}/documents/${docId}/questions`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const res = await apiFetch(`${API_BASE}/documents/${docId}/questions`);
         if (res.ok) {
           const data = await res.json();
           currentQuestions = data.items;
@@ -397,9 +433,7 @@
 
       // Fetch reviews
       try {
-        const revRes = await fetch(`${API_BASE}/documents/${docId}/reviews`, {
-          headers: { "Authorization": `Bearer ${token}` }
-        });
+        const revRes = await apiFetch(`${API_BASE}/documents/${docId}/reviews`);
         if (revRes.ok) {
           const revData = await revRes.json();
           currentReviews = revData.items;
@@ -490,13 +524,14 @@
 
     // 1-Click Sample Trigger
     async function triggerSample(sampleName) {
-      if (!token) await login();
       try {
-        const res = await fetch(`${API_BASE}/documents/sample/${sampleName}`, {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${token}` }
+        const res = await apiFetch(`${API_BASE}/documents/sample/${sampleName}`, {
+          method: "POST"
         });
-        if (!res.ok) throw new Error("Sample trigger failed");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Sample trigger failed");
+        }
         const data = await res.json();
         startTracking(data.document_id, sampleName);
         fetchDocuments();
@@ -531,18 +566,19 @@
 
     uploadBtn.addEventListener("click", async () => {
       if (!fileToUpload) return;
-      if (!token) await login();
 
       const formData = new FormData();
       formData.append("file", fileToUpload);
 
       try {
-        const res = await fetch(`${API_BASE}/documents`, {
+        const res = await apiFetch(`${API_BASE}/documents`, {
           method: "POST",
-          headers: { "Authorization": `Bearer ${token}` },
           body: formData,
         });
-        if (!res.ok) throw new Error("Upload failed");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `Upload failed (${res.status} ${res.statusText})`);
+        }
         const data = await res.json();
         startTracking(data.document_id, fileToUpload.name);
         fileToUpload = null;
@@ -564,9 +600,7 @@
 
       pollingInterval = setInterval(async () => {
         try {
-          const res = await fetch(`${API_BASE}/documents/${docId}/status`, {
-            headers: { "Authorization": `Bearer ${token}` }
-          });
+          const res = await apiFetch(`${API_BASE}/documents/${docId}/status`);
           if (!res.ok) return;
           const status = await res.json();
 
